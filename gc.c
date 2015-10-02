@@ -11,6 +11,7 @@
  * Each header has the following bits:
  *   -> 2 bits: gray and black bits for mark and sweep garbage collection.
  *              free blocks are represented as having only the black bit on.
+ *      -> 0=white, 0x4000=free, 0x8000=gray, 0xc000=black.
  *   -> 3 bits: type of object.
  *   -> 11 bits: represents the chunk data length 0..4094 bytes. The less
  *               significant bit is always 0, and that's why it's not stored.
@@ -97,8 +98,9 @@ allocate: {
     // oldsz - sz     > 0,
     // oldsz - sz - 1 >= 0.
     if (oldsz > sz) cursor[sz+1] = 0x4000 | (oldsz - sz - 1);
-    // objects are created in gray color:
-    *cursor = 0x8000 | (tag << 11) | sz;
+    // objects are created in white or gray color depending on the state:
+    if (state == GC_STATE_INIT) *cursor = (tag << 11) | sz; // white
+    else *cursor = 0x8000 | (tag << 11) | sz; // gray
   }
   return cursor + 1;
 }
@@ -109,8 +111,16 @@ struct gc_run_privdata {
   char overflow; // boolean
 };
 static gc_run_mark_cb(void * ref, struct gc_run_privdata * pd) {
-  // TODO: traverse BFS... marking
-  // TODO: if there's no space in the buffer set overflow to true
+  unsigned int * refobj = (unsigned int *)ref - 1;
+  if (0 != 0xc000 & *refobj) return; // ignore non white
+  *refobj |= 0x8000; // paint it gray
+  if (pd->items_in_buffer < SCRATCHPAD_SIZE / 2) {
+    // there's space in the buffer, add it...
+    ((unsigned int**)scratchpad)
+      [ (pd->rp + ++(pd->items_in_buffer))%(SCRATCHPAD_SIZE/2) ] = refobj;
+  } else {
+    pd->overflow = 1;
+  }
 }
 
 void gc_run(int steps) {
@@ -144,7 +154,7 @@ void gc_run(int steps) {
   //        found, then added to the buffer and going back to the BFS.  If
   //        this pointer finishes visiting all the objects then the iteration
   //        finishes, going back to step 3.
-#define add_to_circular_buffer(item) ((unsigned int*)scratchpad) [ \
+#define add_to_circular_buffer(item) ((unsigned int**)scratchpad) [ \
     (pd.rp+(++pd.items_in_buffer))%(SCRATCHPAD_SIZE/2) ] = (item)
   struct gc_run_privdata pd; // bcc doesn't support struct initialization
   unsigned int * cursor = memstart;
@@ -181,7 +191,17 @@ traverse_bfs_with_items:
   return;
 #undef add_to_circular_buffer
 sweep:
-  // TODO...
+  cursor = memstart;
+  while ((unsigned int)cursor < (unsigned int)memstart + memsize) {
+    assert(0x8000 == 0xc000 & *cursor);
+    if (0x8000 & *cursor) { // if it is black (or gray, but it shouldn't)
+      *cursor &= ~0xc000; // set it white
+    } else if (0 == 0xc000 & *cursor) { // it it is white
+      *cursor |= 0x4000; // set it free
+      if (cursor < first_free_chunk) first_free_chunk = cursor;
+    }
+    cursor = gc_next_chunk(cursor);
+  }
   state = GC_STATE_INIT;
 }
 
