@@ -20,8 +20,8 @@
 #define GC_STATE_INIT 0
 #define GC_STATE_INCOMPLETE 1
 static int state = GC_STATE_INIT;
-static void * memstart;
 static void ** root_object_reference;
+static void * memstart;
 static unsigned int memsize;
 static unsigned int usedram;
 static unsigned int * first_free_chunk;
@@ -112,6 +112,10 @@ struct gc_run_privdata {
 };
 static gc_run_mark_cb(void * ref, struct gc_run_privdata * pd) {
   unsigned int * refobj = (unsigned int *)ref - 1;
+  // it must be a valid gc_alloc'ated object:
+  assert((unsigned int)memstart <= (unsigned int)ref);
+  assert((unsigned int)ref < (unsigned int)memstart + memsize);
+  assert(0 == 1 & (unsigned int)ref);
   if (0 != 0xc000 & *refobj) return; // ignore non white
   *refobj |= 0x8000; // paint it gray
   if (pd->items_in_buffer < SCRATCHPAD_SIZE / 2) {
@@ -159,7 +163,9 @@ void gc_run(int steps) {
   struct gc_run_privdata pd; // bcc doesn't support struct initialization
   unsigned int * cursor = memstart;
   pd.rp = pd.items_in_buffer = pd.overflow = 0;
-  if (state == GC_STATE_INIT) add_to_circular_buffer(*root_object_reference);
+  if (state == GC_STATE_INIT && root_object_reference) {
+    add_to_circular_buffer(*root_object_reference);
+  }
   while (steps) {
     // mark:
     while (pd.items_in_buffer) {
@@ -209,8 +215,42 @@ void gc_compact(void) {
   // TODO
 }
 
-void gc_init(void * memstart_, unsigned int memsize_) {
-  int registered_free_chunks = 0;
+void gc_info(unsigned int * totalram,
+    unsigned int * freeram,
+    unsigned int * object_count_p,
+    unsigned int * cfc_p) { // contiguous free chunks
+  if (totalram) *totalram = memsize;
+  if (freeram) *freeram = memsize - usedram;
+  if (object_count_p || cfc_p) {
+    unsigned int * cursor = memstart;
+    unsigned int object_count = 0;
+    unsigned int cfc = 0;
+    char last_chunk_was_free = 0;
+    while ((unsigned int)cursor < (unsigned int)memstart + memsize) {
+      object_count++;
+      if (0x4000 != 0xc000 & *cursor) {
+	last_chunk_was_free = 0;
+      } else if (!last_chunk_was_free) {
+	last_chunk_was_free = 1;
+	cfc++;
+      }
+      cursor = gc_next_chunk(cursor);
+    }
+    if (object_count_p) *object_count_p = object_count;
+    if (cfc_p) *cfc_p = cfc;
+  }
+}
+
+void gc_init(void * memstart_, unsigned int memsize_,
+    void ** root_object_reference_) {
+  // ensure memory start & size are 2-byte aligned:
+  if (1 & (unsigned int)memstart_) {
+    memstart_ = 1 + (char*)memstart_;
+    memsize_--;
+  }
+  memsize_ &= ~1;
+
+  root_object_reference = root_object_reference_;
   memstart = memstart_;
   memsize = memsize_;
   usedram = 0;
