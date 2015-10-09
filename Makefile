@@ -14,4 +14,4 @@ gc.obj: gc.c gc.h
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:
-	rm -f *.obj main.com
+	rm -f *.obj main.map main.com

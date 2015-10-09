@@ -5,6 +5,10 @@
 #include "gc.h"
 
 /**
+ * This code is beautifully hardcoded to 16 bit pointers. If you want to port
+ * it to "newer" (more bloated) architectures, feel free to do so; as you'll
+ * probably need to change everything.
+ *
  * The GC memory is just a concatenation of chunks with the following form:
  *   -> 16 bits header (that's why we use unsigned int everywhere).
  *   -> variable length data.
@@ -63,7 +67,7 @@ void gc_register_type(unsigned char tag, struct gc_type_vtable * vtable) {
 }
 
 void * gc_alloc(unsigned char tag, unsigned int size) {
-  unsigned int * cursor = first_free_chunk;
+  unsigned int * cursor;
   unsigned int sz = (size + 1) >> 1; // adjusted for tag format
   char gc_was_run = 0;
   if (tag > 7 || sz > 0x7ff) {
@@ -75,6 +79,7 @@ void * gc_alloc(unsigned char tag, unsigned int size) {
     if (size + 2 > memsize - usedram) return NULL;
     gc_was_run = 1;
   }
+  cursor = first_free_chunk;
   // there's ram, so let's see if there's a chunk with enough free space
   while ((unsigned int)cursor < (unsigned int)memstart + memsize) {
     if (0x4000 == 0xc000 & *cursor) { // free ram...
@@ -97,7 +102,17 @@ allocate: {
     // oldsz          > sz,
     // oldsz - sz     > 0,
     // oldsz - sz - 1 >= 0.
-    if (oldsz > sz) cursor[sz+1] = 0x4000 | (oldsz - sz - 1);
+    first_free_chunk += sz + 1;
+    // mark the remaining space as free:
+    if (oldsz > sz) {
+      cursor[sz+1] = 0x4000 | (oldsz - sz - 1);
+    } else {
+      // update first_free_chunk to the next free chunk
+      while (0x4000 != (0xc000 & *first_free_chunk) &&
+	  (unsigned int)first_free_chunk < (unsigned int)memstart + memsize) {
+	first_free_chunk = gc_next_chunk(first_free_chunk);
+      }
+    }
     // objects are created in white or gray color depending on the state:
     if (state == GC_STATE_INIT) *cursor = (tag << 11) | sz; // white
     else *cursor = 0x8000 | (tag << 11) | sz; // gray
@@ -211,7 +226,47 @@ sweep:
   state = GC_STATE_INIT;
 }
 
+// -> obj_addr should be pointer to the object, not to the header.
+// returns a pointer to the scratchpad where:
+//   * if obj_addr was found, then obj_addr==(void*)*return_value,
+//     and *(return_value+1) contains the address where it will be relocated.
+//   * if it was not found, then 0==*return_value, and it will be the place
+//     where it can be added as a new entry on the scratchpad hash table.
+unsigned int * gc_compact_find_hash(void * obj_addr) {
+  int bucket = (unsigned int)obj_addr ^ (((unsigned int)obj_addr) >> 8);
+  while (1) {
+    unsigned int * addr = (unsigned int *)scratchpad +
+                          ((bucket & (SCRATCHPAD_MASK>>2)) << 1);
+    if (!*addr) return addr;
+    if (*addr == (unsigned int)obj_addr) return addr;
+    bucket++;
+  }
+}
+
 void gc_compact(void) {
+  // each object to be relocated takes 4 bytes in the scratchpad hash table, 2
+  // bytes for the old address, and 2 bytes for its delta, 75% is used, thus
+  // giving >>2>>1 + >>2>>2:
+  unsigned int remaining = (SCRATCHPAD_SIZE >> 3) + (SCRATCHPAD_SIZE >> 4);
+  unsigned int * cursor = first_free_chunk;
+  unsigned int delta = 0;
+  { // clean scratchpad so we can use it as a hash table:
+    int i, limit = (SCRATCHPAD >> 1) & ~1;
+    for (i = 0; i < limit; i += 2) {
+      i[(unsigned int *)scratchpad] = 0;
+    }
+  }
+  while ((unsigned int)cursor < (unsigned int)memstart + memsize &&
+      remaining > 0) {
+    if (0x4000 == 0xc000 & *cursor) {
+      delta += (0x7ff & *cursor) << 1;
+    } else if (delta > 0) {
+      unsigned int * addr = gc_compact_find_hash(cursor + 1);
+      remaining--;
+    }
+    cursor = gc_next_chunk(cursor);
+  }
+
   // TODO
 }
 
