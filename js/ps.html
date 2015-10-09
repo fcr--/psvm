@@ -1,0 +1,31 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head><meta charset="UTF-8"><title>Mi página web.</title>
+<link rel="stylesheet" href="/web.css" type="text/css"></head>
+<body bgcolor="Black" text="Lime" link="Lime" vlink="Lime">
+<script src="ps.js"></script><script src="ps-tests.js"></script>
+<pre>|<a href="/">Portada</a>|<!--<a href="/blog">-->Blog<!--</a>-->|<!--<a href="/space">-->Space<!--</a>-->|
+</pre><pre id="console">
+This is the console, and if you see this message then you'll need to enable
+javascript to use this webpage.
+</pre>
+<script>
+try {
+  var interp = new Interp();
+  interp.console = new BasicConsole(document.getElementById("console"))
+  interp.execute({obj: Interp.parse("(Test add: 1+1=) 1 1 add cvs add =")})
+  interp.require('GET', 'example.ps', function(x,y){if(x=='error')alert(''+y); interp.execute({})})
+} catch(ex) {
+  alert(ex)
+}
+document.addEventListener('keydown', function(event) {
+if(event.keyCode == 37) {
+alert('Left was pressed');
+}
+else if(event.keyCode == 39) {
+alert('Right was pressed');
+}
+});
+</script>
+</body>
+</html>
