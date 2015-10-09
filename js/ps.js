@@ -169,7 +169,7 @@ function Interp() {
     }], ["cvs", function(interp) {
       interp.stack.push(interp.stack.pop().toString())
     }], ["dup", function(interp) {
-      if (interp.stack.length < 2) throw "dup: /stackunderflow"
+      if (interp.stack.length < 1) throw "dup: /stackunderflow"
       interp.stack.push(interp.stack[interp.stack.length - 1])
     }], ["end", function(interp) {
       if (interp.names.length < 2) throw "end: /dictstackunderflow"
@@ -404,7 +404,8 @@ Interp.parse = function(text) {
       i--
       symbolName = symbolName.join("")
       if (/^[+-]?(([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(e[+-]?[0-9]+)?|0x[0-9a-fA-F]+|[1-9][0-9]*)$/.test(symbolName)) {
-	res[res.length-1].push(parseInt(symbolName))
+	res[res.length-1].push(
+	    (symbolName.indexOf('.')>=0 ? parseFloat : parseInt)(symbolName))
       } else if (/^[+-]?0[0-9]*$/.test(symbolName)) { // octal support
 	res[res.length-1].push(parseInt(symbolName, 8))
       } else {

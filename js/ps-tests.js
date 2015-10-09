@@ -1,4 +1,6 @@
-function assertEquals(f) {
+(function(){
+
+var assertEquals = function(f) {
   try {
     var items = f()
     var s0 = JSON.stringify(items[0])
@@ -14,6 +16,19 @@ function assertEquals(f) {
     alert("assertion failed: " + f.toSource() + "\nwith exception: " + err)
   }
 }
+
+var assertException = function(f) {
+  try {
+    var res = f()
+    alert("assertion failed: " + f.toSource() +
+	"\nexpected exception but got: " + res)
+  } catch(ex) {}
+}
+
+/****************\
+*  PARSER TESTS  *
+\****************/
+
 assertEquals(function() {return [Interp.parse("hello world"), [
   new Symbol("hello", false), new Symbol("world", false)]]})
 assertEquals(function() {return [Interp.parse("1 1 add"),
@@ -39,3 +54,31 @@ assertEquals(function() {return [Interp.parse("(1){2 }mark/[ 3]clear"),
   ["1", [2], new Symbol("mark", false), new Symbol("", true),
     new Symbol("[", false), 3, new Symbol("]", false),
     new Symbol("clear", false)]]})
+
+/************************\
+*  BASIC COMMANDS TESTS  *
+\************************/
+var run = function(psCode) {
+  var interp = new Interp()
+  interp.execute({obj: Interp.parse(psCode)})
+  return interp.stack
+}
+
+assertEquals(function(){return [run("1 1.99 3"), [1, 1.99, 3]]})
+assertEquals(function(){return [run("1 1 add"), [2]]})
+assertEquals(function(){return [run("(a) (b) add"), ["ab"]]})
+assertEquals(function(){return [run("1 2 clear 3"), [3]]})
+assertEquals(function(){return [run("1 2 3 2 copy 4"), [1, 2, 3, 2, 3, 4]]})
+assertEquals(function(){return [run("42 (t) count"), [42, "t", 2]]})
+assertEquals(function(){return [run("-3.1 cvs 0x2a cvs"), ["-3.1", "42"]]})
+assertEquals(function(){return [run("(a) cvs"), ["a"]]})
+assertEquals(function(){return [run("1 2 dup 3"), [1, 2, 2, 3]]})
+assertEquals(function(){return [run("1 2 3 exch 4"), [1, 3, 2, 4]]})
+assertEquals(function(){return [run("false"), [false]]})
+assertEquals(function(){return [run("4 5 6 7 2 index"), [4, 5, 6, 7, 5]]})
+assertEquals(function(){return [run("mark"), [Mark.instance]]})
+assertEquals(function(){return [run("0 {fail} repeat"), []]})
+assertEquals(function(){return [run("1 8 {dup add} repeat"), [256]]})
+assertEquals(function(){return [run("true"), [true]]})
+
+})()
