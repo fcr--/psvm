@@ -126,7 +126,8 @@ if (Map === undefined) {
 //   Map: <<a b>>
 //   Mark: created by running mark
 function Interp() {
-  this.stack = []
+  var stack = this.stack = []
+  stack.last = function() { return stack[stack.length - 1] }
   this.console = new DummyConsole()
   // names is a stack of dictionaries
   this.names = [new Map([
@@ -145,12 +146,14 @@ function Interp() {
 	throw "copy: /unsupported"
       }
     }], ["begin", function(interp) {
-      interp.names.push(new Map())
+      if (interp.stack.length < 1) throw "begin: /stackunderflow"
+      if (!(interp.stack.last() instanceof Map)) throw "begin: /typecheck"
+      interp.names.push(interp.stack.pop())
     }], ["clear", function(interp) {
       interp.stack.length = 0
     }], ["copy", function(interp) {
       if (interp.stack.length < 1) throw "copy: /stackunderflow"
-      var last = interp.stack[interp.stack.length - 1]
+      var last = interp.stack.last()
       if (typeof last == "number") {
 	if (last < 0) throw "copy: /rangecheck"
 	if (interp.stack.length - 1 < last) throw "copy: /stackunderflow"
@@ -166,11 +169,43 @@ function Interp() {
       interp.stack.push(interp.stack.length)
     }], ["currentdict", function(interp) {
       interp.stack.push(interp.names[interp.names.length - 1])
+    }], ["cvi", function(interp) {
+      if (interp.stack.length < 1) throw "cvi: /stackunderflow"
+      var n = interp.stack.last()
+      if (typeof n == "string") {
+	n = Interp.parseNumber(n)
+	if (n === undefined) throw "cvi: /typecheck"
+      } else if (typeof n != "number") {
+	throw "cvi: /typecheck"
+      }
+      interp.stack[interp.stack.length - 1] = n | 0
     }], ["cvs", function(interp) {
       interp.stack.push(interp.stack.pop().toString())
+    }], ["def", function(interp) {
+      if (interp.stack.length < 2) throw "def: /stackunderflow"
+      var s = interp.stack[interp.stack.length - 2]
+      if (!(s instanceof Symbol)) throw "def: /typecheck"
+      interp.names[interp.names.length - 1].set(s.name, interp.stack.pop())
+      interp.stack.pop()
+    }], ["dict", function(interp) {
+      if (interp.stack.length < 1) throw "dict: /stackunderflow"
+      n = interp.stack.last()
+      if (typeof n != "number" || (n|0) != n) throw "dict: /typecheck"
+      if (n < 0) throw "dict: /rangecheck"
+      interp.stack.pop()
+      // n is ignored for native Map.
+      // TODO: use it whenever javascript Map implementation is used.
+      interp.stack.push(new Map())
+    }], ["div", function (interp) {
+      if (interp.stack.length < 2) throw "div: /stackunderflow"
+      var a = interp.stack[interp.stack.length - 2]
+      var b = interp.stack[interp.stack.length - 1]
+      if (typeof a != "number" || typeof b != "number") throw "div: /typecheck"
+      interp.stack.pop()
+      interp.stack[interp.stack.length - 1] = a / b
     }], ["dup", function(interp) {
       if (interp.stack.length < 1) throw "dup: /stackunderflow"
-      interp.stack.push(interp.stack[interp.stack.length - 1])
+      interp.stack.push(interp.stack.last())
     }], ["end", function(interp) {
       if (interp.names.length < 2) throw "end: /dictstackunderflow"
       interp.names.pop()
@@ -180,6 +215,13 @@ function Interp() {
       var y = interp.stack.pop()
       interp.stack.push(x)
       interp.stack.push(y)
+    }], ["exp", function (interp) {
+      if (interp.stack.length < 2) throw "exp: /stackunderflow"
+      var a = interp.stack[interp.stack.length - 2]
+      var b = interp.stack[interp.stack.length - 1]
+      if (typeof a != "number" || typeof b != "number") throw "exp: /typecheck"
+      interp.stack.pop()
+      interp.stack[interp.stack.length - 1] = Math.pow(a, b)
     }], ["false", false],
     ["if", function (interp) { // cond proc if --
       if (interp.stack.length < 2) throw "if: /stackunderflow"
@@ -189,7 +231,7 @@ function Interp() {
       if (cond) interp.threadedStack.push(proc)
     }], ["index", function (interp) { // an .. a0 n index an .. a0 an
       if (interp.stack.length < 2) throw "index: /stackunderflow"
-      n = interp.stack[interp.stack.length - 1]
+      n = interp.stack.last()
       if (typeof n != "number" || (n|0) != n) throw "index: /typecheck"
       if (n < 0) throw "index: /rangecheck"
       if (interp.stack.length < n + 2) throw "index: /stackunderflow"
@@ -199,6 +241,13 @@ function Interp() {
     ["pop", function (interp) {
       if (interp.stack.length < 2) throw "pop: /stackunderflow"
       interp.stack.pop()
+    }], ["mul", function (interp) {
+      if (interp.stack.length < 2) throw "mul: /stackunderflow"
+      var a = interp.stack[interp.stack.length - 2]
+      var b = interp.stack[interp.stack.length - 1]
+      if (typeof a != "number" || typeof b != "number") throw "mul: /typecheck"
+      interp.stack.pop()
+      interp.stack[interp.stack.length - 1] = a * b
     }], ["repeat", function (interp) { // rep proc repeat --
       if (interp.stack.length < 2) throw "repeat: /stackunderflow"
       var rep = interp.stack[interp.stack.length - 2]
@@ -211,6 +260,13 @@ function Interp() {
 	interp.threadedStack.push(proc)
       }
       if (rep-- > 0) cont(interp)
+    }], ["sub", function (interp) {
+      if (interp.stack.length < 2) throw "sub: /stackunderflow"
+      var a = interp.stack[interp.stack.length - 2]
+      var b = interp.stack[interp.stack.length - 1]
+      if (typeof a != "number" || typeof b != "number") throw "sub: /typecheck"
+      interp.stack.pop()
+      interp.stack[interp.stack.length - 1] = a - b
     }], ["true", true],
     ["=", function (interp) {
       if (interp.stack.length < 1) throw "=: /stackunderflow"
@@ -222,8 +278,17 @@ function Interp() {
   // TODO: add remaining basic operators!
   this.threadedStack = []
 }
+Interp.parseNumber = function (text) {
+  if (/^[+-]?([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(e[+-]?[0-9]+)?$/.test(text)) {
+    return parseFloat(text)
+  } else if (/^[+-]?(0x[0-9a-fA-F]+|[1-9][0-9]*)$/.test(text)) {
+    return parseInt(text)
+  } else if (/^[+-]?0[0-9]*$/.test(text)) { // octal support
+    return parseInt(text, 8)
+  }
+}
 Interp.spaces = " \f\n\r\t\v\u00A0\u2028\u2029"
-Interp.endName = Interp.spaces + "[]{}<>/"
+Interp.endName = Interp.spaces + "[]{}<>()/"
 Interp.escapeChars = {n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", "\n": ""}
 Interp.prototype.constructor = Interp
 Interp.prototype.resolve = function(name) {
@@ -245,8 +310,11 @@ Interp.prototype.execute = function(params) {
   if ('obj' in params) this.threadedStack.push(params.obj)
   var steps = ('steps' in params) ? params.steps : Infinity
   while (steps > 0) {
+    if (this.threadedStack.length === 0) return
     var obj = this.threadedStack.pop()
-    if (obj === undefined) return
+    if (obj === null || obj === undefined) {
+      alert("something's gone really bad")
+    }
     if (typeof obj == "function") {
       obj(this)
     } else if (typeof obj == "number" || typeof obj == "string" ||
@@ -311,6 +379,7 @@ Interp.prototype.require = function(method, url, callback) {
 }
 Interp.parse = function(text) {
   var res = [[]]
+  res.last = function() { return res[res.length - 1] }
   for (var i = 0; i < text.length; i++) {
     var c = text.charAt(i)
     if (c == "%") {
@@ -344,7 +413,7 @@ Interp.parse = function(text) {
       if (i >= text.length) {
 	throw "Syntax error at " + i + ", unexpected EOF inside string"
       }
-      res[res.length-1].push(resString.join(""))
+      res.last().push(resString.join(""))
     } else if (c == ")") { // syntax error
       throw "Syntax error at " + i + ", unexpected ) without open string"
     } else if (c == "/") { // begin symbol name reference
@@ -353,17 +422,17 @@ Interp.parse = function(text) {
 	symbolName.push(c)
 	i++
       }
-      res[res.length-1].push(new Symbol(symbolName.join(""), true))
+      res.last().push(new Symbol(symbolName.join(""), true))
     } else if (c == "{") { // begin block
       res.push([])
     } else if (c == "}") { // end block
       if (res.length < 2) throw "Syntax error at " + i + ", unexpected } outside outmost block"
       var d = res.pop()
-      res[res.length-1].push(d)
+      res.last().push(d)
     } else if (c == "<") { // begin dict or hexstring
       i++
       if (i < text.length && text.charAt(i) == "<") {
-	res[res.length-1].push(new Symbol("<<", false))
+	res.last().push(new Symbol("<<", false))
       } else {
 	var bytes = [], lastNib = 0, nib = 0, waitingHighNibble = true
 	while (i < text.length && (c=text.charAt(i)) != ">") {
@@ -380,16 +449,16 @@ Interp.parse = function(text) {
 	  i++
 	}
 	if (!waitingHighNibble) bytes.push(String.fromCharCode(lastNib * 16))
-	res[res.length-1].push(bytes.join(""))
+	res.last().push(bytes.join(""))
 	if (c != ">") {
 	  throw "Syntax error at " + i + ", unexpected EOF inside hex string"
 	}
       }
     } else if (c == "[" || c == "]") { // begin or end array
-      res[res.length-1].push(new Symbol(c, false))
+      res.last().push(new Symbol(c, false))
     } else if (c == ">") { // syntax error unless next is end dict
       if (i + 1 < text.length && text.charAt(i+1) == ">") {
-	res[res.length-1].push(new Symbol(">>", false))
+	res.last().push(new Symbol(">>", false))
 	i++
       } else {
 	throw "Syntax error at " + i + ", unexpected >"
@@ -403,14 +472,8 @@ Interp.parse = function(text) {
       }
       i--
       symbolName = symbolName.join("")
-      if (/^[+-]?(([0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(e[+-]?[0-9]+)?|0x[0-9a-fA-F]+|[1-9][0-9]*)$/.test(symbolName)) {
-	res[res.length-1].push(
-	    (symbolName.indexOf('.')>=0 ? parseFloat : parseInt)(symbolName))
-      } else if (/^[+-]?0[0-9]*$/.test(symbolName)) { // octal support
-	res[res.length-1].push(parseInt(symbolName, 8))
-      } else {
-	res[res.length-1].push(new Symbol(symbolName, false))
-      }
+      var d = Interp.parseNumber(symbolName)
+      res.last().push(d!==undefined ? d : new Symbol(symbolName, false))
     }
   }
   if (res.length > 1) throw "Syntax error at " + i + ", unexpected EOF inside block"
