@@ -1,12 +1,17 @@
 
-if (Map === undefined) {
-  alert("Old browsers without Map are not *yet* supported.\n" +
-      "When I have time I'm gonna finish the implementation, " +
-      "please bear with me.")
-  Map = function() {
+if (this.Map === undefined) {
+  /* This is a half-compatible pretty decent implementation of Map in native
+   * javascript. It just provides enough support for this project.
+   */
+  Map = function(kv) {
     this.__array = []
     this.size = 0
     this.initialize()
+    if (kv !== undefined) {
+      for (var i = 0; i < kv.length; i++) {
+	this.set(kv[i][0], kv[i][1])
+      }
+    }
   }
 
   Map.prototype.delete = function(key) {
@@ -20,11 +25,12 @@ if (Map === undefined) {
   Map.prototype.findBucketOrUndefined = function(key) {
     // return the index associated to the key.
     var sz = this.__array.length
-    var bucket = Map.Hash(key) % sz
-    while ((a = this.__array[bucket] !== undefined) && (a.key !== key)) {
+    var bucket = Map.hash(key) % sz
+    var a
+    while (((a = this.__array[bucket]) !== undefined) && (a.key !== key)) {
       bucket = (bucket + 1) % sz
     }
-    return a && bucket
+    if (a) return bucket
   }
 
   Map.prototype.fixCollisionsFrom = function(bucket) {
@@ -57,7 +63,7 @@ if (Map === undefined) {
     var a, bucket = Map.hash(key) % this.__array.length
     // in case of a collision advance a bucket
     while ((a = this.__array[bucket]) !== undefined && a.key !== key) {
-      bucket = (bucket + 1) % as
+      bucket = (bucket + 1) % this.__array.length
     }
     this.__array[bucket] = {key: key, value: value}
     if (a === undefined) this.size++
@@ -67,7 +73,7 @@ if (Map === undefined) {
   Map.prototype.resizeIfNeeded = function(up) {
     var newSize, newArray = []
     if (up) {
-      var upperLimit = (this.__array.length * 5 / 4) | 0 // 80%
+      var upperLimit = (this.__array.length * 4 / 5) | 0 // 80%
       if (this.size <= upperLimit) return this
 
       newSize = this.__array.length * 2 + 5
@@ -93,8 +99,8 @@ if (Map === undefined) {
     return this
   }
 
-  (function() {
-    var lastStorageId = 1000000;
+  var _ = function() {
+    var lastStorageId = 1000000
 
     Map.hash = function(object) {
       if (object === null) return 0
@@ -116,7 +122,7 @@ if (Map === undefined) {
 	default: return 6
       }
     }
-  }());
+  }; _()
 }
 // types:
 //   number: 42, -1, 3.14, 9.8e-1
@@ -189,13 +195,14 @@ function Interp() {
       interp.stack.pop()
     }], ["dict", function(interp) {
       if (interp.stack.length < 1) throw "dict: /stackunderflow"
-      n = interp.stack.last()
+      var n = interp.stack.last()
       if (typeof n != "number" || (n|0) != n) throw "dict: /typecheck"
       if (n < 0) throw "dict: /rangecheck"
       interp.stack.pop()
+      var d = new Map()
       // n is ignored for native Map.
-      // TODO: use it whenever javascript Map implementation is used.
-      interp.stack.push(new Map())
+      if ('initialize' in d) d.initialize((n * 1.5) | 0)
+      interp.stack.push(d)
     }], ["div", function (interp) {
       if (interp.stack.length < 2) throw "div: /stackunderflow"
       var a = interp.stack[interp.stack.length - 2]
@@ -322,7 +329,7 @@ Interp.prototype.execute = function(params) {
 	obj instanceof Mark || (obj instanceof Symbol && obj.reference)) {
       this.stack.push(obj)
     } else if (obj instanceof Array) {
-      var contFunction = (function(obj, pos){
+      var _ = function(obj, pos){
 	var f = function(interp) {
 	  var o = obj[pos]
 	  if (obj.length > ++pos) interp.threadedStack.push(f)
@@ -333,7 +340,8 @@ Interp.prototype.execute = function(params) {
 	  }
 	}
 	return f
-      })(obj, 0)
+      }
+      var contFunction = _(obj, 0)
       if (obj.length) this.threadedStack.push(contFunction)
     } else if (obj instanceof Symbol && !obj.reference) {
       this.threadedStack.push(this.resolve(obj.name))
@@ -349,7 +357,7 @@ Interp.prototype.require = function(method, url, callback) {
   client.open(method, url, true)
   callback = callback === undefined ? function(){} : callback
   client.onreadystatechange = function() {
-    if (client.readyState == XMLHttpRequest.DONE) {
+    if (client.readyState == 4) {
       if (client.responseText === null) {
 	// XMLHttpRequest does not provide more information since it could
 	// be a security breach.
@@ -374,7 +382,7 @@ Interp.prototype.require = function(method, url, callback) {
     }
   }
   client.overrideMimeType('text/plain; charset=UTF-8')
-  client.send()
+  client.send(null)
   return client
 }
 Interp.parse = function(text) {
@@ -530,10 +538,14 @@ BasicConsole.colors = [
 ]
 BasicConsole.prototype = new DummyConsole()
 BasicConsole.prototype.constructor = BasicConsole
+if (typeof Text === "undefined") {
+  // hack for Konqueror support:
+  Text = document.createTextNode('').__proto__.constructor
+}
 BasicConsole.prototype.print = function(str) {
   var span = this.elem.lastChild
   var style = this.getCssAttr()
-  if (!(span instanceof HTMLSpanElement) ||
+  if (span === null || span.tagName != "SPAN" ||
       span.getAttribute('style') != style) {
     span = document.createElement('span')
     span.setAttribute('style', style)

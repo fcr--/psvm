@@ -1,4 +1,4 @@
-(function(){
+var _ = function(){
 
 var assertEquals = function(f) {
   try {
@@ -96,4 +96,4 @@ assertEquals(function(){return [run(
       "1 5 div 3 arctansteps 16 mul  1 239 div 3 arctansteps 4 mul sub " +
       "100000 mul cvi"), [314159]]})
 
-})()
+}; _()
