@@ -6,3 +6,24 @@
   0 {(, failed with 0) add} repeat
   (, counting to 3:) add 1
   3 {exch ( )add 1 index cvs add exch 1 add} repeat pop =
+1 0 0 grputpixel grflush
+3 dict begin
+  /demos {
+    {x y add 10 div cvi 16 mod}
+    {rand 2 mul cvi 8 mul}
+    {x 20 mod 10 sub dup mul y 20 mod 10 sub dup mul add abs
+     65 rand 5 mul add lt 1 3 ifelse}
+    {x 160 sub dup mul y 100 sub dup mul add sqrt
+     y 100 sub x 160 sub atan2 180 add 3 div add
+     10 div cvi 12 mod %2 mod 1 eq 6 15 ifelse
+  }} def
+  0 1 100000 { [demos] length mod [demos] exch get /demo exch def
+    0 1 199 {
+      /y exch def
+      0 1 319 { /x exch def
+	true demo if x y grputpixel
+      } for
+    } for
+    grflush
+  } for
+end

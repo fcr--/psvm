@@ -84,6 +84,8 @@ assertEquals(function(){return [run("0 {fail} repeat"), []]})
 assertEquals(function(){return [run("1 8 {dup add} repeat"), [256]]})
 assertEquals(function(){return [run("2 8 sub"), [-6]]})
 assertEquals(function(){return [run("true"), [true]]})
+assertEquals(function(){return [run("1 0 -1{}for 100 1 1 3 {add} for"), [106]]})
+assertEquals(function(){return [run("1 -1.5 -3 {} for"), [1, -0.5, -2]]})
 
 assertEquals(function(){return [run(
       "/arctansteps { 3 dict begin % x steps arctansteps res\n" +

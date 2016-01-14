@@ -4,28 +4,56 @@
 <link rel="stylesheet" href="/web.css" type="text/css"></head>
 <body bgcolor="Black" text="Lime" link="Lime" vlink="Lime">
 <script src="ps.js"></script><script src="ps-tests.js"></script>
-<pre>|<a href="/">Portada</a>|<!--<a href="/blog">-->Blog<!--</a>-->|<!--<a href="/space">-->Space<!--</a>-->|
-</pre><pre id="console">
+<pre>|<a href="/">Portada</a>|<!--<a href="/blog">-->Blog<!--</a>-->|<!--<a href="/space">-->Space<!--</a>-->|</pre>
+<div style="width:640px; border: 1px solid #0a0">
+<canvas id="console-canvas" width="640" height="400"></canvas><br
+/><div id="console-buttonbar" style="display:flex;width:100%"><button id="console-button1" style="width:25%;background:black;color:#0a0;text-align:left;font-size:10px;
+border-width: 1px 1px 0 0;word-wrap:break-word;
+border-style: solid;
+border-color: #0a0"
+>b1</button><button id="console-button2" style="width:25%;background:black;color:#0a0;text-align:left;font-size:10px;word-wrap:break-word;
+border-width: 1px 1px 0 0;
+border-style: solid;
+border-color: #0a0"
+>b2</button><button id="console-button3" style="width:25%;background:black;color:#0a0;text-align:left;font-size:10px;word-wrap:break-word;
+border-width: 1px 1px 0 0;
+border-style: solid;
+border-color: #0a0"
+>b3</button><button id="console-button4" style="width:25%;background:black;color:#0a0;text-align:left;font-size:10px;word-wrap:break-word;
+border-width: 1px 1px 0 0;
+border-style: solid;
+border-color: #0a0"
+>b4</button></div></div></pre><pre id="console">
 This is the console, and if you see this message then you'll need to enable
 javascript to use this webpage.
 </pre>
+
 <script>
 try {
   var interp = new Interp();
-  interp.console = new BasicConsole(document.getElementById("console"))
+  interp.console = new GraphicConsole({
+    textConsole: new BasicConsole(document.getElementById("console")),
+    canvasElem: document.getElementById("console-canvas"),
+    buttonBarElem: document.getElementById("console-buttonbar"),
+    buttonElems: [document.getElementById("console-button1"),
+      document.getElementById("console-button2"),
+      document.getElementById("console-button3"),
+      document.getElementById("console-button4")]
+  })
   interp.execute({obj: Interp.parse("(Test add: 1+1=) 1 1 add cvs add =")})
-  interp.require('GET', 'example.ps', function(x,y){if(x=='error')alert(''+y); interp.execute({})})
+  interp.require('GET', 'example.ps', {
+    binary: true,
+    callback: function(x,y){if(x=='error')alert(''+y); interp.execute({continueasync:true, steps:30000})}})
 } catch(ex) {
-  alert(ex)
+  alert(ex.toString() + " " + JSON.stringify(ex) + '\n' + ex.stack)
 }
 document.addEventListener('keydown', function(event) {
-if(event.keyCode == 37) {
-alert('Left was pressed');
-}
-else if(event.keyCode == 39) {
-alert('Right was pressed');
-}
-});
+  if(event.keyCode == 37) {
+    alert('Left was pressed')
+  } else if(event.keyCode == 39) {
+    alert('Right was pressed')
+  }
+})
 </script>
 </body>
 </html>
