@@ -19,7 +19,4 @@ Some features:
 
 - Current state: parser and threaded execute are working and complete-ish, but
   only about a dozen commands are implemented.
-- Requires Map, so it'll will only work on newer browsers. However I'm
-  writting a compatible-ish version in pure javascript for older js
-  interpreters, even though it's not complete yet.
 - The code clearly shows that I'm still a beginner with javascript.
